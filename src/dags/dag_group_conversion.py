@@ -23,14 +23,15 @@ with DAG(
     from airflow.operators.python import PythonOperator
     from airflow.utils.task_group import TaskGroup
     from secrets_p6 import vertica_conn_info, s3_conn_info
-    from dag_group_conversion_scripts import stg_group_log, \
-                                             load_to_stg, \
-                                             l_user_group_activity, \
-                                             s_auth_history, \
-                                             dm_user_group_log
+    from jinja2 import Template
     import boto3
     import vertica_python
     import os
+
+    def load_sql_template(file_path, **kwargs):
+        with open(file_path, 'r') as file:
+            template = Template(file.read())
+        return template.render(**kwargs)
 
     def get_data_from_s3(**kwargs):
         AWS_ACCESS_KEY_ID = s3_conn_info['aws_access_key_id']
@@ -85,36 +86,40 @@ with DAG(
         create_stg_group_log = PythonOperator(
             task_id = 'create_stg_group_log',
             python_callable = vertica_execute,
-            op_kwargs = {'sql': stg_group_log.format(user = vertica_conn_info['user'], 
-                                                    stage_schema_postfix = vertica_conn_info['stage_schema_postfix']),
+            op_kwargs = {'sql': load_sql_template('/lessons/dags/sql/stg_group_log.sql', 
+                                                  user = vertica_conn_info['user'], 
+                                                  stage_schema_postfix = vertica_conn_info['stage_schema_postfix']),
                         'vertica_conn_info': vertica_conn_info},
         )
 
         group_log_load_to_stg = PythonOperator(
             task_id = 'group_log_load_to_stg',
             python_callable = vertica_execute,
-            op_kwargs = {'sql': load_to_stg.format(user = vertica_conn_info['user'], 
-                                                    stage_schema_postfix = vertica_conn_info['stage_schema_postfix'],
-                                                    table_name = 'group_log',
-                                                    file_path = '../raw_from_s3/sprint6/group_log.csv'),
+            op_kwargs = {'sql': load_sql_template('/lessons/dags/sql/load_to_stg.sql', 
+                                                  user = vertica_conn_info['user'], 
+                                                  stage_schema_postfix = vertica_conn_info['stage_schema_postfix'],
+                                                  table_name = 'group_log',
+                                                  local_file_path = '../raw_from_s3/sprint6/group_log.csv'),
                         'vertica_conn_info': vertica_conn_info},
         )
 
         fill_l_user_group_activity = PythonOperator(
             task_id = 'fill_l_user_group_activity',
             python_callable = vertica_execute,
-            op_kwargs = {'sql': l_user_group_activity.format(user = vertica_conn_info['user'], 
-                                                    dds_schema_postfix = vertica_conn_info['dds_schema_postfix'],
-                                                    stage_schema_postfix = vertica_conn_info['stage_schema_postfix']),
+            op_kwargs = {'sql': load_sql_template('/lessons/dags/sql/l_user_group_activity.sql', 
+                                                  user = vertica_conn_info['user'], 
+                                                  dds_schema_postfix = vertica_conn_info['dds_schema_postfix'],
+                                                  stage_schema_postfix = vertica_conn_info['stage_schema_postfix']),
                         'vertica_conn_info': vertica_conn_info},
         )
 
         fill_s_auth_history = PythonOperator(
             task_id = 'fill_s_auth_history',
             python_callable = vertica_execute,
-            op_kwargs = {'sql': s_auth_history.format(user = vertica_conn_info['user'], 
-                                                    dds_schema_postfix = vertica_conn_info['dds_schema_postfix'],
-                                                    stage_schema_postfix = vertica_conn_info['stage_schema_postfix']),
+            op_kwargs = {'sql': load_sql_template('/lessons/dags/sql/s_auth_history.sql', 
+                                                  user = vertica_conn_info['user'], 
+                                                  dds_schema_postfix = vertica_conn_info['dds_schema_postfix'],
+                                                  stage_schema_postfix = vertica_conn_info['stage_schema_postfix']),
                         'vertica_conn_info': vertica_conn_info},
         )
 
@@ -125,8 +130,9 @@ with DAG(
     fill_dm_user_group_log = PythonOperator(
         task_id = 'fill_dm_user_group_log',
         python_callable = vertica_execute,
-        op_kwargs = {'sql': dm_user_group_log.format(user = vertica_conn_info['user'], 
-                                                dds_schema_postfix = vertica_conn_info['dds_schema_postfix']),
+        op_kwargs = {'sql': load_sql_template('/lessons/dags/sql/dm_user_group_log.sql',
+                                              user = vertica_conn_info['user'],
+                                              dds_schema_postfix = vertica_conn_info['dds_schema_postfix']),
                     'vertica_conn_info': vertica_conn_info},
     )
 
